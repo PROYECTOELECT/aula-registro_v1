@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registro de Apertura de Aulas</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root { --primary: #1a365d; --accent: #2b6cb0; --bg: #f7fafc; }
+    body { background: var(--bg); font-family: 'Segoe UI', system-ui, sans-serif; }
+    .navbar { background: linear-gradient(135deg, var(--primary), var(--accent)); }
+    .card { border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+    .card-header { background: white; border-bottom: 2px solid #e2e8f0; font-weight: 600; border-radius: 12px 12px 0 0 !important; }
+    .btn-primary { background: var(--accent); border-color: var(--accent); }
+    .table thead th { background: var(--primary); color: white; font-size: 0.78rem; white-space: nowrap; }
+    .table td { font-size: 0.82rem; vertical-align: middle; }
+    .badge-aula { background: #ebf8ff; color: #2b6cb0; }
+    .badge-dia { background: #c6f6d5; color: #276749; font-size: 0.7rem; }
+    .live-dot { width: 8px; height: 8px; background: #48bb78; border-radius: 50%; display: inline-block; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .upload-zone { border: 2px dashed #cbd5e0; border-radius: 12px; padding: 1.2rem; text-align: center; cursor: pointer; }
+    .upload-zone:hover { border-color: var(--accent); background: #ebf8ff; }
+    .stat-card { background: linear-gradient(135deg, #2b6cb0, #1a365d); color: white; border-radius: 12px; }
+    .ind-card { background: white; border-left: 4px solid var(--accent); border-radius: 8px; padding: 0.6rem 0.9rem; }
+    #toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 9999; }
+    .search-results { max-height: 200px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; display: none; background: white; position: absolute; width: 100%; z-index: 20; box-shadow: 0 8px 20px rgba(0,0,0,.12); }
+    .search-results .item { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
+    .search-results .item:hover { background: #ebf8ff; }
+    .search-wrap { position: relative; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+    .horario-grid { font-size: 0.75rem; }
+    .horario-grid th { background: #2b6cb0; color: white; position: sticky; top: 0; }
+    .slot-clase { background: #fef3c7; border-left: 3px solid #d69e2e; padding: 2px 4px; margin-bottom: 2px; border-radius: 3px; font-size: 0.7rem; }
+
+    /* Mobile */
+    @media (max-width: 768px) {
+      .navbar-brand { font-size: 1rem !important; }
+      .navbar .small { font-size: 0.7rem; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .ind-card { padding: 0.5rem 0.6rem; }
+      .ind-card .fs-5 { font-size: 1.1rem !important; }
+      .table thead th, .table td { font-size: 0.72rem; padding: 0.35rem 0.4rem; }
+      .card-header { font-size: 0.9rem; }
+      .container-fluid { padding-left: 0.6rem !important; padding-right: 0.6rem !important; }
+      #modalPassword .modal-dialog { margin: 0.5rem; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-dark mb-3">
+    <div class="container-fluid">
+      <span class="navbar-brand mb-0 h1"><i class="bi bi-building-check me-2"></i>Registro de Apertura de Aulas</span>
+      <div class="d-flex align-items-center gap-2 text-white">
+        {% if user.foto %}
+        <img src="/uploads/{{ user.foto }}" class="avatar" alt="">
+        {% endif %}
+        <span class="small">
+          {{ user.nombre }} · <em>{{ user.rol }}</em>
+          {% if master_nombre %}<br><span class="opacity-75">Master: {{ master_nombre }}</span>{% endif %}
+        </span>
+        {% if es_master_o_admin %}
+        <a href="/rendimiento" class="btn btn-sm btn-outline-light" title="Rendimiento"><i class="bi bi-graph-up"></i></a>
+        <a href="/usuarios" class="btn btn-sm btn-outline-light"><i class="bi bi-people"></i></a>
+        {% endif %}
+        <button type="button" class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#modalPassword" title="Cambiar contraseña">
+          <i class="bi bi-key"></i>
+        </button>
+        <a href="/logout" class="btn btn-sm btn-outline-light">Salir</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-fluid px-3 pb-4">
+    {% if es_master_o_admin %}
+    <!-- Indicadores solo admin/master -->
+    <div class="mb-1 small text-muted fw-semibold">Por edificio</div>
+    <div class="row g-2 mb-3" id="filaIndicadores">
+      {% for ind in indicadores %}
+      <div class="col-6 col-md-3 col-lg-2">
+        <div class="ind-card">
+          <div class="small text-muted text-truncate">{{ ind.edificio }}</div>
+          <div class="fw-bold fs-5">{{ ind.total }} <span class="small fw-normal text-muted">aperturas</span></div>
+        </div>
+      </div>
+      {% else %}
+      <div class="col-12"><small class="text-muted">Sin aperturas registradas aún</small></div>
+      {% endfor %}
+    </div>
+    <div class="mb-1 small text-muted fw-semibold">Por usuario</div>
+    <div class="row g-2 mb-3" id="filaIndicadoresUsuarios">
+      {% for ind in indicadores_usuarios %}
+      <div class="col-6 col-md-3 col-lg-2">
+        <div class="ind-card" style="border-left-color:#38a169">
+          <div class="small text-muted text-truncate">{{ ind.nombre }}</div>
+          <div class="fw-bold fs-5">{{ ind.total }} <span class="small fw-normal text-muted">aperturas</span></div>
+        </div>
+      </div>
+      {% else %}
+      <div class="col-12"><small class="text-muted">—</small></div>
+      {% endfor %}
+    </div>
+    <div class="mb-1 small text-muted fw-semibold">Aulas con más aperturas</div>
+    <div class="row g-2 mb-3" id="filaIndicadoresAulas">
+      {% for ind in indicadores_aulas %}
+      <div class="col-6 col-md-3 col-lg-2">
+        <div class="ind-card" style="border-left-color:#d69e2e">
+          <div class="fw-semibold text-truncate"><span class="badge badge-aula">{{ ind.codigo }}</span></div>
+          <div class="small text-muted text-truncate">{{ ind.edificio }}</div>
+          <div class="fw-bold">{{ ind.total }} <span class="small fw-normal text-muted">aperturas</span></div>
+        </div>
+      </div>
+      {% else %}
+      <div class="col-12"><small class="text-muted">—</small></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="row g-3">
+      <div class="col-lg-4">
+        <!-- Archivos Excel (máx 5) -->
+        <div class="card mb-3">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-file-earmark-spreadsheet me-1"></i> Horarios Excel</span>
+            <span class="badge bg-primary">{{ total_archivos }}/{{ max_archivos }}</span>
+          </div>
+          <div class="card-body">
+            {% if archivos %}
+            <ul class="list-group list-group-flush mb-2">
+              {% for a in archivos %}
+              <li class="list-group-item px-0 py-2 d-flex justify-content-between align-items-start">
+                <div class="small">
+                  <strong>{{ a.nombre_archivo }}</strong><br>
+                  <span class="text-muted">{{ a.fecha_carga.strftime('%d/%m/%Y %H:%M') }} · {{ a.total_aulas }} aulas</span>
+                </div>
+                {% if es_master_o_admin %}
+                <button class="btn btn-outline-danger btn-sm" onclick="eliminarArchivo({{ a.id }})" title="Eliminar">
+                  <i class="bi bi-trash"></i>
+                </button>
+                {% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+            {% else %}
+            <p class="text-muted small">Ningún archivo cargado</p>
+            {% endif %}
+            {% if es_master_o_admin %}
+              {% if total_archivos < max_archivos %}
+            <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+              <i class="bi bi-cloud-upload fs-3 text-muted"></i>
+              <p class="mb-0 small mt-1">Subir Excel ({{ total_archivos }}/{{ max_archivos }})</p>
+            </div>
+            <input type="file" id="fileInput" accept=".xlsx,.xls" class="d-none" onchange="subirArchivo(this)">
+              {% else %}
+            <p class="text-warning small mb-0">Límite de {{ max_archivos }} archivos. Elimina uno para subir otro.</p>
+              {% endif %}
+            {% else %}
+            <p class="text-muted small mb-0">Solo admin/master cargan horarios.</p>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Formulario registro -->
+        <div class="card mb-3">
+          <div class="card-header"><i class="bi bi-door-open me-1"></i> Registrar Apertura</div>
+          <div class="card-body">
+            <form id="formRegistro" onsubmit="registrar(event)">
+              <!-- Edificio: libre (solo se guarda en el registro, no en la base) -->
+              <div class="mb-2">
+                <label class="form-label small">Edificio *</label>
+                <input type="text" class="form-control form-control-sm" name="edificio" id="selEdificio" list="listaEdificios" required placeholder="Ej: 101, 105, B-101...">
+                <datalist id="listaEdificios">
+                  {% for e in edificios %}
+                  <option value="{{ e.nombre }}"></option>
+                  {% endfor %}
+                </datalist>
+                <div class="form-text">Si no está en el Excel, escribe el número o nombre. Solo se guarda en el registro de apertura.</div>
+              </div>
+
+              <!-- Aula -->
+              <div class="mb-2">
+                <label class="form-label small">Código de aula *</label>
+                <div class="search-wrap">
+                  <input type="text" class="form-control form-control-sm" id="buscaAula" name="aula_codigo" required placeholder="Código o nombre..." autocomplete="off" oninput="buscarAulas()">
+                  <div class="search-results" id="resultadosBusqueda"></div>
+                </div>
+                <div id="aulaInfo" class="small text-muted mt-1" style="display:none;"></div>
+              </div>
+
+              <div class="mb-2">
+                <label class="form-label small">Docente *</label>
+                <input type="text" class="form-control form-control-sm" name="docente_nombre" required>
+              </div>
+              <div class="mb-2">
+                <label class="form-label small">Cédula *</label>
+                <input type="text" class="form-control form-control-sm" name="cedula" required>
+              </div>
+              <div class="mb-2">
+                <label class="form-label small">Quien registra *</label>
+                <input type="text" class="form-control form-control-sm" name="registrador_nombre" required value="{{ user.nombre }}">
+              </div>
+              <div class="mb-2">
+                <label class="form-label small">Motivo *</label>
+                <select class="form-select form-select-sm" name="motivo" id="motivoSelect" required onchange="toggleMotivoOtro()">
+                  <option value="">— Selecciona —</option>
+                  <option>Clase programada</option>
+                  <option>Clase de recuperación</option>
+                  <option>Examen</option>
+                  <option>Reunión / Junta</option>
+                  <option>Evento institucional</option>
+                  <option>Mantenimiento</option>
+                  <option>Uso libre / estudio</option>
+                  <option value="Otro">Otro</option>
+                </select>
+                <input type="text" class="form-control form-control-sm mt-1" id="motivoOtro" placeholder="Especifica motivo" style="display:none">
+              </div>
+              <div class="mb-2">
+                <label class="form-label small">Observaciones</label>
+                <textarea class="form-control form-control-sm" name="observaciones" rows="2"></textarea>
+              </div>
+              <button type="submit" class="btn btn-primary btn-sm w-100">Registrar Apertura</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-8">
+        <!-- Horario aula -->
+        <div class="card mb-3" id="panelHorario" style="display:none">
+          <div class="card-header d-flex justify-content-between flex-wrap gap-1">
+            <span>Horario: <strong id="horarioTitulo"></strong></span>
+            <div id="diasBadges"></div>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive" style="max-height:260px;overflow-y:auto">
+              <table class="table table-bordered table-sm mb-0 horario-grid">
+                <thead><tr><th>Hora</th><th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th><th>Sáb</th><th>Dom</th></tr></thead>
+                <tbody id="horarioBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Reportes -->
+        <div class="card mb-3">
+          <div class="card-body py-2">
+            <div class="d-flex flex-wrap align-items-end gap-2">
+              <div>
+                <label class="form-label small mb-0">Desde</label>
+                <input type="date" class="form-control form-control-sm" id="fechaInicio">
+              </div>
+              <div>
+                <label class="form-label small mb-0">Hasta</label>
+                <input type="date" class="form-control form-control-sm" id="fechaFin">
+              </div>
+              {% if es_master_o_admin %}
+              <div>
+                <label class="form-label small mb-0">Usuario</label>
+                <select class="form-select form-select-sm" id="filtroUsuario">
+                  <option value="">Todos</option>
+                  {% for u in lista_usuarios %}
+                  <option value="{{ u.id }}">{{ u.username }} ({{ u.nombre }})</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="form-label small mb-0">Edificio</label>
+                <select class="form-select form-select-sm" id="filtroEdificio">
+                  <option value="">Todos</option>
+                  {% for e in edificios %}
+                  <option value="{{ e.nombre }}">{{ e.nombre }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              {% endif %}
+              <button class="btn btn-success btn-sm" onclick="exportar('excel')">Excel</button>
+              <button class="btn btn-danger btn-sm" onclick="exportar('pdf')">PDF</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabla registros -->
+        <div class="card">
+          <div class="card-header d-flex justify-content-between">
+            <span><i class="bi bi-clock-history me-1"></i> Registros <span class="live-dot ms-1"></span></span>
+            <span class="badge bg-secondary" id="totalRegistros">{{ total_registros }}</span>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive" style="max-height:420px;overflow-y:auto">
+              <table class="table table-hover table-striped mb-0">
+                <thead class="sticky-top">
+                  <tr>
+                    <th>#</th><th>Fecha</th><th>Aula</th><th>Edificio</th><th>Docente</th><th>Cédula</th>
+                    <th>Motivo</th><th>Usuario</th><th>Obs.</th>
+                  </tr>
+                </thead>
+                <tbody id="tablaRegistros">
+                  {% for r in registros %}
+                  <tr>
+                    <td>{{ r.id }}</td>
+                    <td>{{ r.fecha_hora.strftime('%d/%m %H:%M') }}</td>
+                    <td><span class="badge badge-aula">{{ r.aula_codigo }}</span></td>
+                    <td class="small">{{ r.edificio or '—' }}</td>
+                    <td>{{ r.docente_nombre }}</td>
+                    <td class="small">{{ r.cedula }}</td>
+                    <td class="small">{{ r.motivo or '—' }}</td>
+                    <td class="small">{{ r.usuario_nombre or r.registrador_nombre or r.usuario_username }}</td>
+                    <td class="small">{{ (r.observaciones or '—')[:30] }}</td>
+                  </tr>
+                  {% else %}
+                  <tr><td colspan="9" class="text-center text-muted py-3">Sin registros</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  
+  <!-- Modal cambiar contraseña -->
+  <div class="modal fade" id="modalPassword" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-key me-2"></i>Cambiar contraseña</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <form id="formPassword" onsubmit="cambiarPassword(event)">
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Contraseña actual</label>
+              <div class="input-group">
+                <input type="password" class="form-control" name="password_actual" id="pwdActual" required>
+                <button type="button" class="btn btn-outline-secondary" onclick="togglePwd('pwdActual',this)"><i class="bi bi-eye"></i></button>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Nueva contraseña</label>
+              <div class="input-group">
+                <input type="password" class="form-control" name="password_nueva" id="pwdNueva" required minlength="4">
+                <button type="button" class="btn btn-outline-secondary" onclick="togglePwd('pwdNueva',this)"><i class="bi bi-eye"></i></button>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Confirmar nueva contraseña</label>
+              <div class="input-group">
+                <input type="password" class="form-control" name="password_confirmar" id="pwdConf" required minlength="4">
+                <button type="button" class="btn btn-outline-secondary" onclick="togglePwd('pwdConf',this)"><i class="bi bi-eye"></i></button>
+              </div>
+            </div>
+            <div id="pwdMsg" class="small"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const DIAS = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
+    const ES_ADMIN_MASTER = {{ 'true' if es_master_o_admin else 'false' }};
+    const hoy = new Date().toISOString().slice(0,10);
+    document.getElementById('fechaInicio').value = hoy;
+    document.getElementById('fechaFin').value = hoy;
+
+    function toast(msg, type='success') {
+      const id='t'+Date.now(); const bg=type==='success'?'bg-success':'bg-danger';
+      const el=document.createElement('div');
+      el.innerHTML=`<div id="${id}" class="toast show text-white ${bg} border-0 mb-2"><div class="d-flex"><div class="toast-body">${msg}</div><button class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div></div>`;
+      document.getElementById('toast-container').appendChild(el.firstChild);
+      setTimeout(()=>document.getElementById(id)?.remove(),4000);
+    }
+
+    function toggleMotivoOtro() {
+      const o=document.getElementById('motivoOtro');
+      if(document.getElementById('motivoSelect').value==='Otro'){o.style.display='block';o.required=true;}
+      else{o.style.display='none';o.required=false;o.value='';}
+    }
+
+
+    let buscaTimeout=null;
+    async function buscarAulas() {
+      clearTimeout(buscaTimeout);
+      const q=document.getElementById('buscaAula').value.trim();
+      const box=document.getElementById('resultadosBusqueda');
+      const edificio=document.getElementById('selEdificio').value;
+      if(q.length<1){box.style.display='none';return;}
+      buscaTimeout=setTimeout(async()=>{
+        let url='/api/aulas?q='+encodeURIComponent(q);
+        if(edificio) url+='&edificio='+encodeURIComponent(edificio);
+        const res=await fetch(url); const lista=await res.json();
+        if(!lista.length){
+          box.innerHTML='<div class="item text-muted">No está en el Excel. Se registrará la apertura con el código escrito (sin agregar el aula a la base).</div>';
+          document.getElementById('aulaInfo').style.display='none';
+          document.getElementById('panelHorario').style.display='none';
+          box.style.display='block'; return;
+        }
+        box.innerHTML=lista.map(a=>`<div class="item" data-c="${a.codigo}"><strong>${a.codigo}</strong> <small class="text-muted">${(a.nombre||'').slice(0,40)}</small></div>`).join('');
+        box.querySelectorAll('.item[data-c]').forEach(el=>{
+          el.onclick=()=>{
+            const a=lista.find(x=>x.codigo===el.dataset.c);
+            document.getElementById('buscaAula').value=a.codigo;
+            box.style.display='none';
+            if(a.edificio){
+              document.getElementById('selEdificio').value = a.edificio;
+            }
+            document.getElementById('aulaInfo').style.display='block';
+            document.getElementById('aulaInfo').textContent=(a.nombre||'')+(a.capacidad?' · Cap: '+a.capacidad:'');
+            mostrarHorario(a.codigo);
+          };
+        });
+        box.style.display='block';
+      },200);
+    }
+    document.addEventListener('click',e=>{if(!e.target.closest('.search-wrap'))document.getElementById('resultadosBusqueda').style.display='none';});
+
+    async function mostrarHorario(codigo){
+      const res=await fetch('/api/aula/'+encodeURIComponent(codigo));
+      if(!res.ok){document.getElementById('panelHorario').style.display='none';return;}
+      const data=await res.json();
+      document.getElementById('horarioTitulo').textContent=data.codigo;
+      const dias=data.dias_habilitados||[];
+      document.getElementById('diasBadges').innerHTML=dias.map(d=>`<span class="badge badge-dia">${d.slice(0,3)}</span>`).join(' ');
+      const horario=data.horario||{};
+      const horasSet=new Set(); DIAS.forEach(d=>(horario[d]||[]).forEach(s=>horasSet.add(s.hora)));
+      const horas=[...horasSet].sort();
+      if(!horas.length){document.getElementById('horarioBody').innerHTML='<tr><td colspan="8" class="text-center text-muted">Sin horario</td></tr>';}
+      else{
+        const mapa={}; DIAS.forEach(d=>(horario[d]||[]).forEach(s=>{const k=s.hora+'|'+d;if(!mapa[k])mapa[k]=[];mapa[k].push(s.clase);}));
+        document.getElementById('horarioBody').innerHTML=horas.map(h=>{
+          const cells=DIAS.map(d=>{const c=mapa[h+'|'+d]||[];return c.length?'<td>'+c.map(x=>`<div class="slot-clase">${x}</div>`).join('')+'</td>':'<td></td>';}).join('');
+          return `<tr><td class="small">${h.replace(/:00/g,'')}</td>${cells}</tr>`;
+        }).join('');
+      }
+      document.getElementById('panelHorario').style.display='block';
+    }
+
+    async function registrar(e){
+      e.preventDefault();
+      const fd=new FormData(e.target);
+      let motivo=fd.get('motivo');
+      if(motivo==='Otro'){motivo=document.getElementById('motivoOtro').value.trim();if(!motivo){toast('Especifica el motivo','error');return;}}
+      fd.set('motivo',motivo);
+      try{
+        const res=await fetch('/api/registrar',{method:'POST',body:fd});
+        const data=await res.json();
+        if(!res.ok) throw new Error(data.detail||'Error');
+        toast(data.mensaje);
+        e.target.reset();
+        document.getElementById('motivoOtro').style.display='none';
+        document.getElementById('aulaInfo').style.display='none';
+        document.getElementById('panelHorario').style.display='none';
+        e.target.registrador_nombre.value='{{ user.nombre }}';
+        cargarRegistros(); cargarIndicadores();
+      }catch(err){toast(err.message,'error');}
+    }
+
+    async function cargarRegistros(){
+      let url='/api/registros?limit=100';
+      if(ES_ADMIN_MASTER){
+        const uid=document.getElementById('filtroUsuario')?.value;
+        const ed=document.getElementById('filtroEdificio')?.value;
+        if(uid) url+='&usuario_id='+uid;
+        if(ed) url+='&edificio='+encodeURIComponent(ed);
+      }
+      const res=await fetch(url); const lista=await res.json();
+      document.getElementById('totalRegistros').textContent=lista.length;
+      const tbody=document.getElementById('tablaRegistros');
+      if(!lista.length){tbody.innerHTML='<tr><td colspan="9" class="text-center text-muted py-3">Sin registros</td></tr>';return;}
+      tbody.innerHTML=lista.map(r=>`<tr>
+        <td>${r.id}</td><td>${r.fecha_hora}</td>
+        <td><span class="badge badge-aula">${r.aula_codigo}</span></td>
+        <td class="small">${r.edificio||'—'}</td>
+        <td>${r.docente_nombre}</td>
+        <td class="small">${r.cedula||'—'}</td>
+        <td class="small">${r.motivo||'—'}</td>
+        <td class="small">${r.usuario_nombre||r.registrador_nombre||r.usuario_username||'—'}</td>
+        <td class="small">${(r.observaciones||'—').slice(0,30)}</td>
+      </tr>`).join('');
+    }
+
+    async function cargarIndicadores(){
+      const res=await fetch('/api/indicadores'); const data=await res.json();
+      const lista=data.edificios||data;
+      const usuarios=data.usuarios||[];
+      const aulas=data.aulas||[];
+      const fila=document.getElementById('filaIndicadores');
+      if(!lista.length){fila.innerHTML='<div class="col-12"><small class="text-muted">Sin aperturas</small></div>';}
+      else{
+        fila.innerHTML=lista.map(i=>`<div class="col-6 col-md-3 col-lg-2"><div class="ind-card">
+          <div class="small text-muted text-truncate">${i.edificio}</div>
+          <div class="fw-bold fs-5">${i.total} <span class="small fw-normal text-muted">aperturas</span></div>
+        </div></div>`).join('');
+      }
+      const filaU=document.getElementById('filaIndicadoresUsuarios');
+      if(filaU){
+        if(!usuarios.length){filaU.innerHTML='<div class="col-12"><small class="text-muted">—</small></div>';}
+        else{
+          filaU.innerHTML=usuarios.map(i=>`<div class="col-6 col-md-3 col-lg-2"><div class="ind-card" style="border-left-color:#38a169">
+            <div class="small text-muted text-truncate">${i.nombre}</div>
+            <div class="fw-bold fs-5">${i.total} <span class="small fw-normal text-muted">aperturas</span></div>
+          </div></div>`).join('');
+        }
+      }
+      const filaA=document.getElementById('filaIndicadoresAulas');
+      if(filaA){
+        if(!aulas.length){filaA.innerHTML='<div class="col-12"><small class="text-muted">—</small></div>';}
+        else{
+          filaA.innerHTML=aulas.map(i=>`<div class="col-6 col-md-3 col-lg-2"><div class="ind-card" style="border-left-color:#d69e2e">
+            <div class="fw-semibold text-truncate"><span class="badge badge-aula">${i.codigo}</span></div>
+            <div class="small text-muted text-truncate">${i.edificio||''}</div>
+            <div class="fw-bold">${i.total} <span class="small fw-normal text-muted">aperturas</span></div>
+          </div></div>`).join('');
+        }
+      }
+    }
+
+    function exportar(tipo){
+      const ini=document.getElementById('fechaInicio').value;
+      const fin=document.getElementById('fechaFin').value;
+      if(!ini||!fin){toast('Selecciona fechas','error');return;}
+      let url=`/api/exportar/${tipo}?fecha_inicio=${ini}&fecha_fin=${fin}`;
+      if(ES_ADMIN_MASTER){
+        const uid=document.getElementById('filtroUsuario')?.value;
+        const ed=document.getElementById('filtroEdificio')?.value;
+        if(uid) url+='&usuario_id='+uid;
+        if(ed) url+='&edificio='+encodeURIComponent(ed);
+      }
+      window.location.href=url;
+    }
+
+    async function subirArchivo(input){
+      const fd=new FormData(); fd.append('file',input.files[0]);
+      try{
+        const res=await fetch('/api/upload',{method:'POST',body:fd});
+        const data=await res.json();
+        if(!res.ok) throw new Error(data.detail||'Error');
+        toast(data.mensaje); setTimeout(()=>location.reload(),800);
+      }catch(e){toast(e.message,'error');}
+    }
+    async function eliminarArchivo(id){
+      if(!confirm('¿Eliminar este archivo de horario?'))return;
+      const res=await fetch('/api/eliminar-archivo/'+id,{method:'POST'});
+      const data=await res.json();
+      if(res.ok){toast(data.mensaje);setTimeout(()=>location.reload(),800);}
+      else toast(data.detail||'Error','error');
+    }
+
+    
+    function togglePwd(id, btn) {
+      const el = document.getElementById(id);
+      const icon = btn.querySelector('i');
+      if (el.type === 'password') { el.type = 'text'; icon.className = 'bi bi-eye-slash'; }
+      else { el.type = 'password'; icon.className = 'bi bi-eye'; }
+    }
+    async function cambiarPassword(e) {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const msg = document.getElementById('pwdMsg');
+      try {
+        const res = await fetch('/api/cambiar-password', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Error');
+        msg.innerHTML = '<span class="text-success">' + data.mensaje + '</span>';
+        e.target.reset();
+        setTimeout(() => {
+          bootstrap.Modal.getInstance(document.getElementById('modalPassword'))?.hide();
+          msg.innerHTML = '';
+        }, 1200);
+        toast(data.mensaje);
+      } catch (err) {
+        msg.innerHTML = '<span class="text-danger">' + err.message + '</span>';
+      }
+    }
+
+    setInterval(cargarRegistros,8000);
+  </script>
+</body>
+</html>
