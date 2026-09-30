@@ -1,10 +1,10 @@
 """
 Parser del archivo de mapa horario por Sala.
-Extrae las aulas y su horario semanal (días y franjas con clases).
+Compatible con Excel de edificios 101, 106, etc.
+Formato: "Sala SALÓN DE CLASES - [B-106A-101]" + filas de horas por día.
 """
 from openpyxl import load_workbook
-from typing import List, Dict, Any
-import json
+from typing import List, Dict, Any, Optional
 import re
 
 
@@ -16,12 +16,10 @@ def _limpiar_texto_clase(texto: str) -> str:
     if not texto:
         return ""
     t = str(texto).replace("\n", " ").strip()
-    # Tomar primera línea / código + nombre corto
     if " | " in t:
         partes = t.split(" | ")
         codigo = partes[0].strip()
         resto = partes[1].strip() if len(partes) > 1 else ""
-        # Acortar
         if len(resto) > 40:
             resto = resto[:37] + "..."
         return f"{codigo} | {resto}" if resto else codigo
@@ -30,14 +28,54 @@ def _limpiar_texto_clase(texto: str) -> str:
     return t
 
 
+def _extraer_codigo_y_edificio(texto_sala: str, row=None) -> tuple:
+    """
+    Extrae código de aula y edificio desde el texto de la fila Sala.
+    Ej: "Sala SALÓN DE CLASES - [B-106A-101]" -> ("B-106A-101", "B-106")
+    También intenta columnas extra si existen (formatos antiguos).
+    """
+    codigo = None
+    edificio = None
+    capacidad = None
+
+    # Formato preferido: código entre corchetes
+    m = re.search(r"\[([^\]]+)\]", texto_sala or "")
+    if m:
+        codigo = m.group(1).strip()
+
+    # Columnas extra (algunos Excel antiguos traen código en col K, edificio en J)
+    if row is not None and len(row) > 10:
+        if row[10] and not codigo:
+            codigo = str(row[10]).strip()
+        if row[9]:
+            edificio = str(row[9]).strip()
+        if len(row) > 11 and row[11] is not None:
+            try:
+                capacidad = int(row[11])
+            except (ValueError, TypeError):
+                capacidad = None
+
+    if not codigo:
+        return None, None, None
+
+    # Edificio a partir del código: B-106A-101 -> B-106 ; B-106T-302 -> B-106
+    if not edificio:
+        m2 = re.match(r"^(B-\d+)", codigo, re.IGNORECASE)
+        if m2:
+            edificio = m2.group(1).upper()
+        else:
+            # fallback: parte antes del último guion con letras
+            partes = codigo.split("-")
+            if len(partes) >= 2:
+                edificio = f"{partes[0]}-{partes[1][:3]}" if partes[1] else partes[0]
+
+    return codigo, edificio, capacidad
+
+
 def parsear_aulas_desde_excel(ruta_archivo: str) -> List[Dict[str, Any]]:
     """
     Lee el Excel y devuelve lista de aulas con:
-    codigo, nombre, edificio, capacidad, horario
-    horario = {
-      "Lunes": [{"hora": "7:00:00 - 7:15:00", "clase": "..."}, ...],
-      ...
-    }
+    codigo, nombre, edificio, capacidad, horario, dias_habilitados
     """
     wb = load_workbook(ruta_archivo, read_only=True, data_only=True)
     ws = wb[wb.sheetnames[0]]
@@ -45,7 +83,6 @@ def parsear_aulas_desde_excel(ruta_archivo: str) -> List[Dict[str, Any]]:
     aulas: List[Dict] = []
     codigos_vistos = set()
 
-    # Estado actual del bloque de sala
     sala_actual = None
     leyendo_horas = False
     horario_actual: Dict[str, list] = {d: [] for d in DIAS}
@@ -63,57 +100,47 @@ def parsear_aulas_desde_excel(ruta_archivo: str) -> List[Dict[str, Any]]:
         leyendo_horas = False
 
     for row in ws.iter_rows(min_row=1, max_col=12, values_only=True):
-        celda_a = row[0]
+        celda_a = row[0] if row else None
 
-        if not celda_a or not isinstance(celda_a, str):
-            # Si estamos en un bloque y la fila tiene datos de días, igual procesar
-            if sala_actual and leyendo_horas:
-                pass
-            else:
-                continue
-
-        celda_a = str(celda_a).strip()
+        # Convertir a texto si es necesario
+        texto_a = str(celda_a).strip() if celda_a is not None else ""
 
         # Nueva sala
-        if celda_a.startswith("Sala "):
-            # Guardar la anterior
+        if texto_a.startswith("Sala "):
             if sala_actual:
                 guardar_sala()
 
-            codigo = row[10]
-            edificio = row[9]
-            capacidad = row[11]
-
+            codigo, edificio, capacidad = _extraer_codigo_y_edificio(texto_a, row)
             if not codigo:
                 sala_actual = None
+                leyendo_horas = False
                 continue
 
-            codigo = str(codigo).strip()
-            try:
-                capacidad = int(capacidad) if capacidad is not None else None
-            except (ValueError, TypeError):
-                capacidad = None
-
+            # Nombre legible: quitar prefijo Sala y corchetes si se desea
+            nombre = texto_a
             sala_actual = {
                 "codigo": codigo,
-                "nombre": celda_a,
-                "edificio": str(edificio).strip() if edificio else None,
+                "nombre": nombre,
+                "edificio": edificio,
                 "capacidad": capacidad,
             }
             horario_actual = {d: [] for d in DIAS}
             leyendo_horas = False
             continue
 
-        # Fila de encabezado de días
-        if celda_a == "Horas" or celda_a.lower() == "horas":
-            leyendo_horas = True
+        # Encabezado de días
+        if texto_a.lower() == "horas":
+            if sala_actual:
+                leyendo_horas = True
             continue
 
-        # Filas de franjas horarias (empiezan con hora)
-        if sala_actual and leyendo_horas and re.match(r"^\d{1,2}:\d{2}", celda_a):
-            hora = celda_a
+        # Franjas horarias
+        if sala_actual and leyendo_horas and texto_a and re.match(r"^\d{1,2}:\d{2}", texto_a):
+            hora = texto_a
             for i, dia in enumerate(DIAS):
-                valor = row[i + 1]  # columnas B-H = índices 1-7
+                if i + 1 >= len(row):
+                    break
+                valor = row[i + 1]
                 if valor and str(valor).strip():
                     clase = _limpiar_texto_clase(valor)
                     if clase:
@@ -122,7 +149,6 @@ def parsear_aulas_desde_excel(ruta_archivo: str) -> List[Dict[str, Any]]:
                             "clase": clase,
                         })
 
-    # Última sala
     if sala_actual:
         guardar_sala()
 
