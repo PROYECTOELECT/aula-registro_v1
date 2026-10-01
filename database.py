@@ -124,7 +124,8 @@ class RegistroApertura(Base):
     registrador_nombre = Column(String(255), nullable=False)
     motivo = Column(String(255), nullable=False, default="")
     observaciones = Column(Text, nullable=True)
-    fecha_hora = Column(DateTime, default=datetime.now, index=True)
+    fecha_hora = Column(DateTime, default=datetime.now, index=True)  # real del dispositivo al registrar
+    fecha_programada = Column(String(120), nullable=True)  # del Excel reserva/clase (ini-fin)
     usuario_id = Column(Integer, nullable=True, index=True)
     usuario_username = Column(String(80), nullable=True)
     usuario_nombre = Column(String(150), nullable=True)
@@ -161,8 +162,30 @@ class ReservaAula(Base):
     activo = Column(Boolean, default=True)
 
 
+def _ensure_columns():
+    """Agrega columnas nuevas si la BD ya existía (Neon/SQLite)."""
+    try:
+        with engine.begin() as conn:
+            dialect = engine.dialect.name
+            if dialect == "sqlite":
+                rows = conn.exec_driver_sql("PRAGMA table_info(registros_apertura)").fetchall()
+                cols = {r[1] for r in rows}
+                if "fecha_programada" not in cols:
+                    conn.exec_driver_sql(
+                        "ALTER TABLE registros_apertura ADD COLUMN fecha_programada VARCHAR(120)"
+                    )
+            else:
+                # PostgreSQL
+                conn.exec_driver_sql(
+                    "ALTER TABLE registros_apertura ADD COLUMN IF NOT EXISTS fecha_programada VARCHAR(120)"
+                )
+    except Exception as e:
+        print(f"[warn] ensure_columns: {e}")
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
+    _ensure_columns()
     db = SessionLocal()
     try:
         if db.query(Usuario).count() == 0:

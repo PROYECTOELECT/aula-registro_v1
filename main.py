@@ -812,6 +812,7 @@ async def registrar_apertura(
     registrador_nombre: str = Form(...), motivo: str = Form(...),
     observaciones: Optional[str] = Form(None), edificio: Optional[str] = Form(None),
     fecha_hora_dispositivo: Optional[str] = Form(None),
+    fecha_programada: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     user = requiere_login(request)
@@ -859,12 +860,16 @@ async def registrar_apertura(
         if parsed:
             fecha_reg = parsed
 
+    prog = (fecha_programada or "").strip() or None
+
     registro = RegistroApertura(
         aula_codigo=aula_codigo, aula_nombre=aula_nombre, edificio=edificio_val,
         docente_nombre=docente_nombre.strip(), cedula=cedula.strip(),
         registrador_nombre=registrador_nombre.strip(), motivo=motivo,
         observaciones=(observaciones or "").strip() or None,
-        fecha_hora=fecha_reg, usuario_id=user["user_id"],
+        fecha_hora=fecha_reg,
+        fecha_programada=prog,
+        usuario_id=user["user_id"],
         usuario_username=user["username"], usuario_nombre=user["nombre"],
     )
     db.add(registro)
@@ -877,6 +882,7 @@ async def registrar_apertura(
             "edificio": registro.edificio, "docente_nombre": registro.docente_nombre,
             "motivo": registro.motivo, "usuario_nombre": registro.usuario_nombre,
             "fecha_hora": registro.fecha_hora.strftime("%Y-%m-%d %H:%M:%S"),
+            "fecha_programada": registro.fecha_programada or "",
         },
     }
 
@@ -903,6 +909,7 @@ async def listar_registros(
             "usuario_username": r.usuario_username or "",
             "usuario_nombre": r.usuario_nombre or r.registrador_nombre or "",
             "fecha_hora": r.fecha_hora.strftime("%Y-%m-%d %H:%M:%S"),
+            "fecha_programada": r.fecha_programada or "",
         }
         for r in registros
     ]
@@ -995,7 +1002,7 @@ async def exportar_excel(
     header_font = Font(bold=True, color="FFFFFF")
     header_fill = PatternFill("solid", fgColor="1F4E79")
     thin = Border(left=Side(style="thin"), right=Side(style="thin"), top=Side(style="thin"), bottom=Side(style="thin"))
-    headers = ["ID", "Código", "Aula", "Edificio", "Docente", "Cédula", "Registra", "Usuario (nombre)", "Motivo", "Observaciones", "Fecha"]
+    headers = ["ID", "Código", "Aula", "Edificio", "Docente", "Cédula", "Registra", "Usuario (nombre)", "Motivo", "Observaciones", "Fecha programada (Excel)", "Fecha/Hora registro real"]
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=h)
         cell.font = header_font
@@ -1005,7 +1012,9 @@ async def exportar_excel(
         for ci, v in enumerate([
             r.id, r.aula_codigo, r.aula_nombre or "", r.edificio or "", r.docente_nombre, r.cedula,
             r.registrador_nombre, r.usuario_nombre or r.usuario_username or "", r.motivo or "",
-            r.observaciones or "", r.fecha_hora.strftime("%Y-%m-%d %H:%M:%S"),
+            r.observaciones or "",
+            r.fecha_programada or "",
+            r.fecha_hora.strftime("%Y-%m-%d %H:%M:%S"),
         ], 1):
             cell = ws.cell(row=ri, column=ci, value=v)
             cell.border = thin
@@ -1044,10 +1053,11 @@ async def exportar_pdf(
         Paragraph("Registro de Apertura de Aulas", ParagraphStyle("T", parent=styles["Heading1"], fontSize=13, alignment=1)),
         Paragraph(f"{fecha_inicio} — {fecha_fin} | Total: {len(registros)}", ParagraphStyle("S", parent=styles["Normal"], fontSize=9, alignment=1, spaceAfter=8)),
     ]
-    data = [["ID", "Código", "Edificio", "Docente", "Usuario", "Motivo", "Fecha"]]
+    data = [["ID", "Código", "Edificio", "Docente", "Usuario", "Motivo", "Prog.", "Registro"]]
     for r in registros:
-        data.append([str(r.id), r.aula_codigo, (r.edificio or "")[:20], r.docente_nombre[:16],
-                     (r.usuario_nombre or r.usuario_username or "")[:16], (r.motivo or "")[:18],
+        data.append([str(r.id), r.aula_codigo, (r.edificio or "")[:16], r.docente_nombre[:14],
+                     (r.usuario_nombre or r.usuario_username or "")[:14], (r.motivo or "")[:14],
+                     (r.fecha_programada or "—")[:18],
                      r.fecha_hora.strftime("%Y-%m-%d %H:%M")])
     table = Table(data, repeatRows=1)
     table.setStyle(TableStyle([

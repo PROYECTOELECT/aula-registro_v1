@@ -335,6 +335,13 @@
                 <input type="hidden" name="fecha_hora_dispositivo" id="fechaHoraDispositivo">
                 <div class="form-text">Se registra en tiempo real; no se puede editar.</div>
               </div>
+              <div class="mb-2">
+                <label class="form-label small">Fecha programada (Excel / reserva)</label>
+                <input type="text" class="form-control form-control-sm bg-light" id="fechaProgramadaDisplay" readonly tabindex="-1"
+                       placeholder="Si viene de reserva o horario Excel">
+                <input type="hidden" name="fecha_programada" id="fechaProgramada">
+                <div class="form-text">Del archivo de reserva o clase programada. Vacío si es apertura libre.</div>
+              </div>
               <button type="submit" class="btn btn-primary btn-sm w-100">Registrar Apertura</button>
             </form>
           </div>
@@ -413,7 +420,7 @@
               <table class="table table-hover table-striped mb-0">
                 <thead class="sticky-top">
                   <tr>
-                    <th>#</th><th>Fecha/Hora registro</th><th>Aula</th><th>Edificio</th><th>Docente</th><th>Cédula</th>
+                    <th>#</th><th>Fecha programada</th><th>Fecha/Hora registro</th><th>Aula</th><th>Edificio</th><th>Docente</th><th>Cédula</th>
                     <th>Motivo</th><th>Usuario</th><th>Obs.</th>
                   </tr>
                 </thead>
@@ -421,7 +428,8 @@
                   {% for r in registros %}
                   <tr>
                     <td>{{ r.id }}</td>
-                    <td>{{ r.fecha_hora.strftime('%d/%m %H:%M') }}</td>
+                    <td class="small">{{ r.fecha_programada or '—' }}</td>
+                    <td>{{ r.fecha_hora.strftime('%d/%m/%Y %H:%M:%S') }}</td>
                     <td><span class="badge badge-aula">{{ r.aula_codigo }}</span></td>
                     <td class="small">{{ r.edificio or '—' }}</td>
                     <td>{{ r.docente_nombre }}</td>
@@ -699,6 +707,8 @@
         document.getElementById('panelHorario').style.display='none';
         e.target.registrador_nombre.value='{{ user.nombre }}';
         stampFechaHoraDispositivo();
+        const fp=document.getElementById('fechaProgramada'); if(fp) fp.value='';
+        const fpd=document.getElementById('fechaProgramadaDisplay'); if(fpd) fpd.value='';
         cargarRegistros(); cargarIndicadores();
       }catch(err){toast(err.message,'error');}
     }
@@ -714,9 +724,11 @@
       const res=await fetch(url); const lista=await res.json();
       document.getElementById('totalRegistros').textContent=lista.length;
       const tbody=document.getElementById('tablaRegistros');
-      if(!lista.length){tbody.innerHTML='<tr><td colspan="9" class="text-center text-muted py-3">Sin registros</td></tr>';return;}
+      if(!lista.length){tbody.innerHTML='<tr><td colspan="10" class="text-center text-muted py-3">Sin registros</td></tr>';return;}
       tbody.innerHTML=lista.map(r=>`<tr>
-        <td>${r.id}</td><td>${r.fecha_hora}</td>
+        <td>${r.id}</td>
+        <td class="small">${r.fecha_programada||'—'}</td>
+        <td class="small fw-semibold">${r.fecha_hora}</td>
         <td><span class="badge badge-aula">${r.aula_codigo}</span></td>
         <td class="small">${r.edificio||'—'}</td>
         <td>${r.docente_nombre}</td>
@@ -876,6 +888,12 @@
       }
       const obs=form.querySelector('[name="observaciones"]');
       if(obs) obs.value=`Reserva: ${r.area_solicitante||''} | ${r.dia||''} ${r.fecha_ini||''} ${r.hora_ini||''} a ${r.fecha_fin||''} ${r.hora_fin||''}`.trim();
+      const prog = [r.dia, r.fecha_ini, r.hora_ini].filter(Boolean).join(' ')
+        + ((r.fecha_fin||r.hora_fin) ? ' → ' + [r.fecha_fin, r.hora_fin].filter(Boolean).join(' ') : '');
+      const fp=document.getElementById('fechaProgramada');
+      const fpd=document.getElementById('fechaProgramadaDisplay');
+      if(fp) fp.value=prog.trim();
+      if(fpd) fpd.value=prog.trim()||'—';
       if(r.aula_codigo && typeof mostrarHorario==='function'){ try{ mostrarHorario(r.aula_codigo); }catch(e){} }
       form.scrollIntoView({behavior:'smooth', block:'start'});
       toast('Datos de la reserva cargados en el formulario');
