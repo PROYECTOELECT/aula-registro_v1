@@ -811,6 +811,7 @@ async def registrar_apertura(
     aula_codigo: str = Form(...), docente_nombre: str = Form(...), cedula: str = Form(...),
     registrador_nombre: str = Form(...), motivo: str = Form(...),
     observaciones: Optional[str] = Form(None), edificio: Optional[str] = Form(None),
+    fecha_hora_dispositivo: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     user = requiere_login(request)
@@ -832,12 +833,38 @@ async def registrar_apertura(
         if not edificio_val:
             raise HTTPException(400, "Indica el número o nombre del edificio")
 
+    # Fecha/hora real del dispositivo (celular, tablet o PC); no editable por el usuario
+    fecha_reg = datetime.now()
+    if fecha_hora_dispositivo:
+        raw = fecha_hora_dispositivo.strip()
+        parsed = None
+        for fmt in (
+            "%Y-%m-%dT%H:%M:%S.%f",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%d %H:%M:%S",
+            "%d/%m/%Y %H:%M:%S",
+            "%d/%m/%Y %H:%M",
+        ):
+            try:
+                parsed = datetime.strptime(raw[:26].replace("Z", ""), fmt)
+                break
+            except ValueError:
+                continue
+        if parsed is None:
+            try:
+                # ISO con timezone offset: 2026-10-01T21:30:00-05:00
+                parsed = datetime.fromisoformat(raw.replace("Z", "+00:00")).replace(tzinfo=None)
+            except Exception:
+                parsed = None
+        if parsed:
+            fecha_reg = parsed
+
     registro = RegistroApertura(
         aula_codigo=aula_codigo, aula_nombre=aula_nombre, edificio=edificio_val,
         docente_nombre=docente_nombre.strip(), cedula=cedula.strip(),
         registrador_nombre=registrador_nombre.strip(), motivo=motivo,
         observaciones=(observaciones or "").strip() or None,
-        fecha_hora=datetime.now(), usuario_id=user["user_id"],
+        fecha_hora=fecha_reg, usuario_id=user["user_id"],
         usuario_username=user["username"], usuario_nombre=user["nombre"],
     )
     db.add(registro)

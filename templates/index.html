@@ -327,6 +327,14 @@
                 <label class="form-label small">Observaciones</label>
                 <textarea class="form-control form-control-sm" name="observaciones" rows="2"></textarea>
               </div>
+              
+              <div class="mb-2">
+                <label class="form-label small">Fecha y hora de registro (dispositivo)</label>
+                <input type="text" class="form-control form-control-sm bg-light" id="fechaHoraDisplay" readonly tabindex="-1"
+                       title="Se toma automáticamente del celular, tablet o computador">
+                <input type="hidden" name="fecha_hora_dispositivo" id="fechaHoraDispositivo">
+                <div class="form-text">Se registra en tiempo real; no se puede editar.</div>
+              </div>
               <button type="submit" class="btn btn-primary btn-sm w-100">Registrar Apertura</button>
             </form>
           </div>
@@ -405,7 +413,7 @@
               <table class="table table-hover table-striped mb-0">
                 <thead class="sticky-top">
                   <tr>
-                    <th>#</th><th>Fecha</th><th>Aula</th><th>Edificio</th><th>Docente</th><th>Cédula</th>
+                    <th>#</th><th>Fecha/Hora registro</th><th>Aula</th><th>Edificio</th><th>Docente</th><th>Cédula</th>
                     <th>Motivo</th><th>Usuario</th><th>Obs.</th>
                   </tr>
                 </thead>
@@ -651,12 +659,35 @@
       document.getElementById('panelHorario').style.display='block';
     }
 
+    function stampFechaHoraDispositivo(){
+      const now=new Date();
+      // Local device time (no UTC conversion): YYYY-MM-DDTHH:MM:SS
+      const pad=n=>String(n).padStart(2,'0');
+      const isoLocal =
+        now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+
+        'T'+pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
+      const display =
+        pad(now.getDate())+'/'+pad(now.getMonth()+1)+'/'+now.getFullYear()+
+        ' '+pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
+      const hid=document.getElementById('fechaHoraDispositivo');
+      const disp=document.getElementById('fechaHoraDisplay');
+      if(hid) hid.value=isoLocal;
+      if(disp) disp.value=display;
+      return isoLocal;
+    }
+
+    // Reloj en vivo del dispositivo
+    setInterval(stampFechaHoraDispositivo, 1000);
+    document.addEventListener('DOMContentLoaded', ()=>{ try{ stampFechaHoraDispositivo(); }catch(e){} });
+
     async function registrar(e){
       e.preventDefault();
       const fd=new FormData(e.target);
       let motivo=fd.get('motivo');
       if(motivo==='Otro'){motivo=document.getElementById('motivoOtro').value.trim();if(!motivo){toast('Especifica el motivo','error');return;}}
       fd.set('motivo',motivo);
+      // Sello en el instante exacto del clic (hora del celular/tablet/PC)
+      fd.set('fecha_hora_dispositivo', stampFechaHoraDispositivo());
       try{
         const res=await fetch('/api/registrar',{method:'POST',body:fd});
         const data=await res.json();
@@ -667,6 +698,7 @@
         document.getElementById('aulaInfo').style.display='none';
         document.getElementById('panelHorario').style.display='none';
         e.target.registrador_nombre.value='{{ user.nombre }}';
+        stampFechaHoraDispositivo();
         cargarRegistros(); cargarIndicadores();
       }catch(err){toast(err.message,'error');}
     }
