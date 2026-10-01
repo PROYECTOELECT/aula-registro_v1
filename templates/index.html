@@ -2,7 +2,15 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1">
+  <meta name="theme-color" content="#1a365d">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Apertura Aulas">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/icon-192.svg">
+  <link rel="icon" href="/static/icon-192.svg" type="image/svg+xml">
   <title>Registro de Apertura de Aulas</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
@@ -29,9 +37,40 @@
     .search-results .item:hover { background: #ebf8ff; }
     .search-wrap { position: relative; }
     .avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
-    .horario-grid { font-size: 0.75rem; }
-    .horario-grid th { background: #2b6cb0; color: white; position: sticky; top: 0; }
-    .slot-clase { background: #fef3c7; border-left: 3px solid #d69e2e; padding: 2px 4px; margin-bottom: 2px; border-radius: 3px; font-size: 0.7rem; }
+    .horario-grid { font-size: 0.72rem; }
+    .horario-grid th { background: #f6e05e; color: #1a202c; position: sticky; top: 0; z-index: 2; font-weight: 700; text-align: center; white-space: nowrap; }
+    .horario-grid th.hora-col, .horario-grid td.hora-col {
+      background: #f6e05e; color: #1a202c; font-weight: 600; white-space: nowrap; position: sticky; left: 0; z-index: 1;
+    }
+    .horario-grid thead th.hora-col { z-index: 3; }
+    .horario-grid td { vertical-align: middle; min-width: 110px; max-width: 160px; padding: 2px 4px; }
+    .slot-clase {
+      background: #f6ad55; color: #1a202c; border: 1px solid #dd6b20;
+      padding: 4px 5px; border-radius: 4px; font-size: 0.68rem; line-height: 1.25;
+      white-space: normal; word-break: break-word;
+    }
+    .slot-vacio { background: #fff; min-height: 18px; }
+    .horario-grid td { vertical-align: middle; min-width: 100px; max-width: 180px; padding: 0; height: 22px; }
+    .horario-grid td.celda-clase {
+      background: #f6ad55 !important;
+      border: 1px solid #d69e2e;
+      vertical-align: middle !important;
+      text-align: center;
+      padding: 4px 6px;
+    }
+    .slot-clase {
+      background: transparent;
+      color: #1a202c;
+      border: none;
+      padding: 2px 4px;
+      font-size: 0.68rem;
+      line-height: 1.3;
+      white-space: pre-line;
+      word-break: break-word;
+      text-align: center;
+    }
+    .slot-vacio { background: #fff !important; min-height: 22px; padding: 0; }
+    #panelHorario .table-responsive { max-height: min(75vh, 640px); overflow: auto; -webkit-overflow-scrolling: touch; }
 
     /* Mobile */
     @media (max-width: 768px) {
@@ -43,6 +82,45 @@
       .card-header { font-size: 0.9rem; }
       .container-fluid { padding-left: 0.6rem !important; padding-right: 0.6rem !important; }
       #modalPassword .modal-dialog { margin: 0.5rem; }
+    }
+
+    /* App-like / PWA */
+    html, body { overscroll-behavior-y: none; }
+    body {
+      padding-bottom: env(safe-area-inset-bottom, 0);
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+    }
+    .navbar {
+      padding-top: max(0.4rem, env(safe-area-inset-top));
+      position: sticky; top: 0; z-index: 1030;
+    }
+    .app-bottom-nav {
+      display: none;
+      position: fixed; left: 0; right: 0; bottom: 0;
+      background: #fff;
+      border-top: 1px solid #e2e8f0;
+      padding: 0.35rem 0.5rem max(0.35rem, env(safe-area-inset-bottom));
+      z-index: 1040;
+      box-shadow: 0 -4px 16px rgba(0,0,0,.06);
+    }
+    .app-bottom-nav a {
+      flex: 1; text-align: center; text-decoration: none; color: #4a5568;
+      font-size: 0.68rem; padding: 0.25rem;
+    }
+    .app-bottom-nav a i { display: block; font-size: 1.25rem; margin-bottom: 2px; }
+    .app-bottom-nav a.active, .app-bottom-nav a:hover { color: #2b6cb0; }
+    @media (max-width: 768px) {
+      .app-bottom-nav { display: flex; }
+      body { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+      .container-fluid { padding-left: 0.6rem !important; padding-right: 0.6rem !important; }
+      .btn, .form-control, .form-select { min-height: 42px; }
+      .card { border-radius: 14px; }
+      .table-responsive { -webkit-overflow-scrolling: touch; }
+      .navbar-brand { font-size: 0.95rem !important; }
+    }
+    @media (display-mode: standalone) {
+      body { background: #f7fafc; }
     }
   </style>
 </head>
@@ -159,6 +237,37 @@
           </div>
         </div>
 
+
+        <!-- Reservas de aulas -->
+        <div class="card mb-3" id="cardReservas">
+          <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-1">
+            <span><i class="bi bi-calendar2-check me-1"></i> Reserva de aulas</span>
+            {% if es_master_o_admin %}
+            <button type="button" class="btn btn-sm btn-success" onclick="document.getElementById('fileReserva').click()">
+              <i class="bi bi-upload me-1"></i> Cargar reservas
+            </button>
+            <input type="file" id="fileReserva" accept=".xlsx,.xls" class="d-none" onchange="subirReserva(this)">
+            {% endif %}
+          </div>
+          <div class="card-body">
+            <p class="small text-muted mb-2">Busca una reserva y registra la apertura con un clic.</p>
+            <div class="search-wrap mb-2">
+              <input type="text" class="form-control form-control-sm" id="buscaReserva"
+                     placeholder="Aula, nombre, cédula, sede..." oninput="buscarReservas()" autocomplete="off">
+              <div class="search-results" id="resultadosReserva" style="display:none"></div>
+            </div>
+            <div id="listaArchivosReserva" class="small text-muted"></div>
+            <div id="detalleReserva" class="border rounded p-2 mt-2 bg-light" style="display:none">
+              <div class="d-flex justify-content-between align-items-start gap-2">
+                <div class="small" id="detalleReservaTxt"></div>
+                <button type="button" class="btn btn-sm btn-primary text-nowrap" onclick="usarReservaParaRegistro()">
+                  <i class="bi bi-door-open me-1"></i> Registrar apertura
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Formulario registro -->
         <div class="card mb-3">
           <div class="card-header"><i class="bi bi-door-open me-1"></i> Registrar Apertura</div>
@@ -209,6 +318,7 @@
                   <option>Evento institucional</option>
                   <option>Mantenimiento</option>
                   <option>Uso libre / estudio</option>
+                  <option>Reserva de aula</option>
                   <option value="Otro">Otro</option>
                 </select>
                 <input type="text" class="form-control form-control-sm mt-1" id="motivoOtro" placeholder="Especifica motivo" style="display:none">
@@ -231,9 +341,15 @@
             <div id="diasBadges"></div>
           </div>
           <div class="card-body p-0">
-            <div class="table-responsive" style="max-height:260px;overflow-y:auto">
+            <div class="table-responsive">
               <table class="table table-bordered table-sm mb-0 horario-grid">
-                <thead><tr><th>Hora</th><th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th><th>Sáb</th><th>Dom</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th class="hora-col">Horas</th>
+                    <th>Lunes</th><th>Martes</th><th>Miércoles</th>
+                    <th>Jueves</th><th>Viernes</th><th>Sábado</th><th>Domingo</th>
+                  </tr>
+                </thead>
                 <tbody id="horarioBody"></tbody>
               </table>
             </div>
@@ -319,6 +435,20 @@
   </div>
 
   
+
+  <nav class="app-bottom-nav" id="appBottomNav">
+    <a href="/" class="active"><i class="bi bi-house-door"></i>Inicio</a>
+    <a href="#formRegistro" onclick="document.getElementById('formRegistro')?.scrollIntoView({behavior:'smooth'});return false;"><i class="bi bi-door-open"></i>Registrar</a>
+    <a href="#tablaRegistros" onclick="document.getElementById('tablaRegistros')?.scrollIntoView({behavior:'smooth'});return false;"><i class="bi bi-clock-history"></i>Historial</a>
+    {% if es_master_o_admin %}
+    <a href="/usuarios"><i class="bi bi-people"></i>Usuarios</a>
+    <a href="/rendimiento"><i class="bi bi-graph-up"></i>Stats</a>
+    {% else %}
+    <a href="#" data-bs-toggle="modal" data-bs-target="#modalPassword"><i class="bi bi-key"></i>Clave</a>
+    <a href="/logout"><i class="bi bi-box-arrow-right"></i>Salir</a>
+    {% endif %}
+  </nav>
+
   <!-- Modal cambiar contraseña -->
   <div class="modal fade" id="modalPassword" tabindex="-1">
     <div class="modal-dialog">
@@ -402,7 +532,11 @@
           document.getElementById('panelHorario').style.display='none';
           box.style.display='block'; return;
         }
-        box.innerHTML=lista.map(a=>`<div class="item" data-c="${a.codigo}"><strong>${a.codigo}</strong> <small class="text-muted">${(a.nombre||'').slice(0,40)}</small></div>`).join('');
+        box.innerHTML=lista.map(a=>{
+          const nom=(a.nombre||'').replace(/^Sala\s+/i,'').slice(0,50);
+          const label=`[${a.codigo}] - ${nom || a.codigo}`;
+          return `<div class="item" data-c="${a.codigo}"><strong>[${a.codigo}]</strong> <small class="text-muted">- ${nom}</small></div>`;
+        }).join('');
         box.querySelectorAll('.item[data-c]').forEach(el=>{
           el.onclick=()=>{
             const a=lista.find(x=>x.codigo===el.dataset.c);
@@ -425,19 +559,94 @@
       const res=await fetch('/api/aula/'+encodeURIComponent(codigo));
       if(!res.ok){document.getElementById('panelHorario').style.display='none';return;}
       const data=await res.json();
-      document.getElementById('horarioTitulo').textContent=data.codigo;
+      document.getElementById('horarioTitulo').textContent = data.nombre || data.codigo;
       const dias=data.dias_habilitados||[];
-      document.getElementById('diasBadges').innerHTML=dias.map(d=>`<span class="badge badge-dia">${d.slice(0,3)}</span>`).join(' ');
+      document.getElementById('diasBadges').innerHTML=dias.map(d=>`<span class="badge badge-dia me-1">${d}</span>`).join(' ');
       const horario=data.horario||{};
-      const horasSet=new Set(); DIAS.forEach(d=>(horario[d]||[]).forEach(s=>horasSet.add(s.hora)));
-      const horas=[...horasSet].sort();
-      if(!horas.length){document.getElementById('horarioBody').innerHTML='<tr><td colspan="8" class="text-center text-muted">Sin horario</td></tr>';}
-      else{
-        const mapa={}; DIAS.forEach(d=>(horario[d]||[]).forEach(s=>{const k=s.hora+'|'+d;if(!mapa[k])mapa[k]=[];mapa[k].push(s.clase);}));
-        document.getElementById('horarioBody').innerHTML=horas.map(h=>{
-          const cells=DIAS.map(d=>{const c=mapa[h+'|'+d]||[];return c.length?'<td>'+c.map(x=>`<div class="slot-clase">${x}</div>`).join('')+'</td>':'<td></td>';}).join('');
-          return `<tr><td class="small">${h.replace(/:00/g,'')}</td>${cells}</tr>`;
-        }).join('');
+
+      // Horas exactamente como en el Excel
+      const horas=[];
+      const seen=new Set();
+      DIAS.forEach(d=>{
+        (horario[d]||[]).forEach(s=>{
+          if(s.hora && !seen.has(s.hora)){ seen.add(s.hora); horas.push(s.hora); }
+        });
+      });
+      horas.sort((a,b)=>{
+        const pa=a.split('-')[0].trim().split(':').map(Number);
+        const pb=b.split('-')[0].trim().split(':').map(Number);
+        return (pa[0]*60+(pa[1]||0))-(pb[0]*60+(pb[1]||0));
+      });
+
+      // Alinear slots por día a la lista de horas
+      const porDia={};
+      DIAS.forEach(d=>{
+        const map={};
+        (horario[d]||[]).forEach(s=>{ if(s.hora) map[s.hora]=s; });
+        porDia[d]=horas.map(h=>{
+          const s=map[h];
+          if(!s) return {hora:h, clase:'', rowspan:1};
+          return {hora:h, clase:(s.clase||'').toString().trim(), rowspan: (s.rowspan!==undefined&&s.rowspan!==null)?Number(s.rowspan):1};
+        });
+      });
+
+      // Si no hay rowspan del parser (datos viejos), unir franjas consecutivas con el mismo texto
+      DIAS.forEach(d=>{
+        const arr=porDia[d];
+        let i=0;
+        while(i<arr.length){
+          if(arr[i].rowspan===0){ i++; continue; }
+          const txt=arr[i].clase;
+          if(!txt){ arr[i].rowspan=1; i++; continue; }
+          // si rowspan ya >1 del parser, saltar el bloque
+          if(arr[i].rowspan>1){
+            for(let k=1;k<arr[i].rowspan && i+k<arr.length;k++) arr[i+k].rowspan=0;
+            i += arr[i].rowspan;
+            continue;
+          }
+          let span=1;
+          while(i+span<arr.length){
+            const n=arr[i+span];
+            // siguiente con mismo texto y rowspan 1, o vacío cubierto
+            if(n.clase===txt && n.rowspan!==0){ span++; }
+            else if(!n.clase && n.rowspan===0){ span++; }
+            else break;
+          }
+          // también unir si siguientes están vacíos pero entre medias el parser puso rowspan 0
+          // solo unir consecutivos con mismo texto
+          let span2=1;
+          while(i+span2<arr.length && arr[i+span2].clase===txt){ span2++; }
+          span=Math.max(span, span2);
+          arr[i].rowspan=span;
+          for(let k=1;k<span;k++) arr[i+k]={hora:arr[i+k].hora, clase:'', rowspan:0};
+          i+=span;
+        }
+      });
+
+      if(!horas.length){
+        document.getElementById('horarioBody').innerHTML='<tr><td colspan="8" class="text-center text-muted">Sin horario</td></tr>';
+      } else {
+        let html='';
+        for(let i=0;i<horas.length;i++){
+          const h=horas[i];
+          let row=`<tr><td class="hora-col small">${h}</td>`;
+          DIAS.forEach(d=>{
+            const s=porDia[d][i];
+            const rs=Number(s.rowspan);
+            if(rs===0) return; // cubierta por franja superior (celda combinada)
+            const txt=(s.clase||'').toString().trim();
+            if(txt){
+              const esc=txt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;').replace(/\n/g,'<br>');
+              const title=txt.replace(/"/g,'&quot;').replace(/\n/g,' ');
+              row += `<td class="celda-clase" rowspan="${rs}"><div class="slot-clase" title="${title}">${esc}</div></td>`;
+            } else {
+              row += `<td class="slot-vacio" rowspan="1"></td>`;
+            }
+          });
+          row += '</tr>';
+          html += row;
+        }
+        document.getElementById('horarioBody').innerHTML=html;
       }
       document.getElementById('panelHorario').style.display='block';
     }
@@ -536,6 +745,113 @@
       window.location.href=url;
     }
 
+
+    let reservaSeleccionada = null;
+
+    async function subirReserva(input){
+      if(!input.files || !input.files[0]) return;
+      const fd=new FormData(); fd.append('file', input.files[0]);
+      try{
+        const res=await fetch('/api/upload-reserva',{method:'POST',body:fd});
+        const data=await res.json();
+        if(!res.ok) throw new Error(typeof data.detail==='string'?data.detail:(data.detail||'Error'));
+        toast(data.mensaje||'Reservas cargadas');
+        input.value='';
+        cargarArchivosReserva();
+      }catch(e){ toast(e.message,'error'); }
+    }
+
+    async function cargarArchivosReserva(){
+      try{
+        const res=await fetch('/api/archivos-reserva');
+        const data=await res.json();
+        const el=document.getElementById('listaArchivosReserva');
+        if(!el) return;
+        if(!data.archivos || !data.archivos.length){ el.textContent='Ningún archivo de reservas cargado'; return; }
+        el.innerHTML = data.archivos.map(a=>
+          `<div class="d-flex justify-content-between align-items-center border-bottom py-1">
+            <span><strong>${a.nombre_archivo}</strong> · ${a.total_reservas} reservas · ${a.fecha_carga}</span>
+            ${ES_ADMIN_MASTER?`<button class="btn btn-outline-danger btn-sm py-0" onclick="eliminarArchivoReserva(${a.id})"><i class="bi bi-trash"></i></button>`:''}
+          </div>`
+        ).join('');
+      }catch(e){}
+    }
+
+    async function eliminarArchivoReserva(id){
+      if(!confirm('¿Eliminar este archivo de reservas?')) return;
+      const res=await fetch('/api/archivos-reserva/'+id,{method:'DELETE'});
+      if(res.ok){ toast('Archivo eliminado'); cargarArchivosReserva(); }
+      else { const data=await res.json(); toast(data.detail||'Error','error'); }
+    }
+
+    let buscaReservaTimeout=null;
+    async function buscarReservas(){
+      clearTimeout(buscaReservaTimeout);
+      const q=(document.getElementById('buscaReserva')?.value||'').trim();
+      const box=document.getElementById('resultadosReserva');
+      if(!box) return;
+      if(q.length<1){ box.style.display='none'; return; }
+      buscaReservaTimeout=setTimeout(async()=>{
+        const res=await fetch('/api/reservas?q='+encodeURIComponent(q));
+        const lista=await res.json();
+        if(!lista.length){
+          box.innerHTML='<div class="item text-muted">Sin reservas que coincidan</div>';
+          box.style.display='block'; return;
+        }
+        box.innerHTML=lista.map((r,i)=>
+          `<div class="item" data-i="${i}">
+            <strong>${r.aula_codigo}</strong>
+            <small class="text-muted"> · ${r.sede||''} · ${r.nombre_persona||''} · CC ${r.cedula||''}</small><br>
+            <small>${r.dia||''} ${r.fecha_ini||''} ${r.hora_ini||''} → ${r.fecha_fin||''} ${r.hora_fin||''}</small>
+          </div>`
+        ).join('');
+        box.querySelectorAll('.item[data-i]').forEach(el=>{
+          el.onclick=()=>{
+            const r=lista[Number(el.dataset.i)];
+            reservaSeleccionada=r;
+            box.style.display='none';
+            document.getElementById('buscaReserva').value=r.aula_codigo;
+            document.getElementById('detalleReservaTxt').innerHTML=
+              `<strong>${r.aula_codigo}</strong> (${r.sede||'—'})<br>${r.nombre_persona||'—'} · CC ${r.cedula||'—'}<br>${r.area_solicitante||''}<br>${r.dia||''} ${r.fecha_ini||''} ${r.hora_ini||''} → ${r.fecha_fin||''} ${r.hora_fin||''}`;
+            document.getElementById('detalleReserva').style.display='block';
+          };
+        });
+        box.style.display='block';
+      }, 280);
+    }
+
+    function usarReservaParaRegistro(){
+      if(!reservaSeleccionada){ toast('Selecciona una reserva','error'); return; }
+      const r=reservaSeleccionada;
+      const form=document.getElementById('formRegistro');
+      if(!form) return;
+      const set=(name,val)=>{ const el=form.querySelector(`[name="${name}"]`); if(el) el.value=val||''; };
+      set('edificio', r.sede||'');
+      set('aula_codigo', r.aula_codigo||'');
+      const busca=document.getElementById('buscaAula');
+      if(busca) busca.value=r.aula_codigo||'';
+      set('docente_nombre', r.nombre_persona||'');
+      set('cedula', r.cedula||'');
+      const motivoSel=document.getElementById('motivoSelect');
+      if(motivoSel){
+        let found=false;
+        for(const o of motivoSel.options){ if(/reserva/i.test(o.value)){ motivoSel.value=o.value; found=true; break; } }
+        if(!found){
+          motivoSel.value='Otro';
+          const o=document.getElementById('motivoOtro');
+          if(o){ o.style.display='block'; o.required=true; o.value='Reserva de aula'+(r.area_solicitante?': '+r.area_solicitante:''); }
+        } else if(typeof toggleMotivoOtro==='function') toggleMotivoOtro();
+      }
+      const obs=form.querySelector('[name="observaciones"]');
+      if(obs) obs.value=`Reserva: ${r.area_solicitante||''} | ${r.dia||''} ${r.fecha_ini||''} ${r.hora_ini||''} a ${r.fecha_fin||''} ${r.hora_fin||''}`.trim();
+      if(r.aula_codigo && typeof mostrarHorario==='function'){ try{ mostrarHorario(r.aula_codigo); }catch(e){} }
+      form.scrollIntoView({behavior:'smooth', block:'start'});
+      toast('Datos de la reserva cargados en el formulario');
+    }
+
+    document.addEventListener('DOMContentLoaded',()=>{ try{ cargarArchivosReserva(); }catch(e){} });
+
+
     async function subirArchivo(input){
       const fd=new FormData(); fd.append('file',input.files[0]);
       try{
@@ -582,5 +898,13 @@
 
     setInterval(cargarRegistros,8000);
   </script>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+    });
+  }
+</script>
 </body>
 </html>

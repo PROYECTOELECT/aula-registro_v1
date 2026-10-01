@@ -22,9 +22,11 @@ from reportlab.lib.units import inch
 
 from database import (
     init_db, get_db, Aula, RegistroApertura, ArchivoHorario, Usuario, Edificio,
+    ArchivoReserva, ReservaAula,
     hash_password, verify_password, contar_generales_de_master, MAX_ARCHIVOS_EXCEL,
 )
 from parser_excel import parsear_aulas_desde_excel
+from parser_reservas import parsear_reservas_desde_excel
 
 app = FastAPI(title="Registro de Apertura de Aulas", version="3.0")
 
@@ -570,6 +572,138 @@ async def eliminar_archivo(archivo_id: int, request: Request, db: Session = Depe
     db.delete(archivo)
     db.commit()
     return {"ok": True, "mensaje": "Archivo eliminado"}
+
+
+
+# ==================== RESERVAS DE AULAS ====================
+
+@app.post("/api/upload-reserva")
+async def upload_reserva(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Carga Excel de reservas (área, cédula, nombre, fechas, sede, aula)."""
+    user = requiere_master_o_admin(request)
+    name = (file.filename or "").lower()
+    if not name.endswith((".xlsx", ".xls")):
+        raise HTTPException(400, "Sube un Excel de reservas (.xlsx). Las imágenes aún no se procesan automáticamente.")
+
+    safe_name = f"res_{secrets.token_hex(4)}_{file.filename}"
+    ruta = os.path.join(UPLOAD_DIR, safe_name)
+    with open(ruta, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    try:
+        filas = parsear_reservas_desde_excel(ruta)
+    except Exception as e:
+        try:
+            os.remove(ruta)
+        except Exception:
+            pass
+        raise HTTPException(400, f"Error al leer reservas: {e}")
+
+    if not filas:
+        try:
+            os.remove(ruta)
+        except Exception:
+            pass
+        raise HTTPException(400, "No se encontraron reservas en el archivo")
+
+    arch = ArchivoReserva(
+        nombre_archivo=file.filename,
+        total_reservas=len(filas),
+        ruta=ruta,
+        fecha_carga=datetime.now(),
+        cargado_por=user["user_id"],
+        activo=True,
+    )
+    db.add(arch)
+    db.flush()
+
+    for frow in filas:
+        db.add(ReservaAula(
+            area_solicitante=frow.get("area_solicitante") or None,
+            cedula=frow.get("cedula") or None,
+            nombre_persona=frow.get("nombre_persona") or None,
+            dia=frow.get("dia") or None,
+            fecha_ini=frow.get("fecha_ini") or None,
+            hora_ini=frow.get("hora_ini") or None,
+            fecha_fin=frow.get("fecha_fin") or None,
+            hora_fin=frow.get("hora_fin") or None,
+            sede=frow.get("sede") or None,
+            aula_codigo=frow["aula_codigo"],
+            archivo_id=arch.id,
+            activo=True,
+        ))
+    db.commit()
+    return {"ok": True, "mensaje": f"Reservas cargadas: {len(filas)}", "total": len(filas), "archivo_id": arch.id}
+
+
+@app.get("/api/archivos-reserva")
+async def listar_archivos_reserva(request: Request, db: Session = Depends(get_db)):
+    requiere_login(request)
+    archivos = db.query(ArchivoReserva).filter(ArchivoReserva.activo == True).order_by(ArchivoReserva.fecha_carga.desc()).all()
+    return {
+        "total": len(archivos),
+        "archivos": [
+            {"id": a.id, "nombre_archivo": a.nombre_archivo, "total_reservas": a.total_reservas,
+             "fecha_carga": a.fecha_carga.strftime("%Y-%m-%d %H:%M") if a.fecha_carga else ""}
+            for a in archivos
+        ],
+    }
+
+
+@app.delete("/api/archivos-reserva/{archivo_id}")
+async def eliminar_archivo_reserva(archivo_id: int, request: Request, db: Session = Depends(get_db)):
+    requiere_master_o_admin(request)
+    arch = db.query(ArchivoReserva).filter(ArchivoReserva.id == archivo_id).first()
+    if not arch:
+        raise HTTPException(404, "Archivo no encontrado")
+    arch.activo = False
+    db.query(ReservaAula).filter(ReservaAula.archivo_id == archivo_id).update({"activo": False})
+    db.commit()
+    return {"ok": True}
+
+
+@app.get("/api/reservas")
+async def buscar_reservas(
+    request: Request,
+    q: str = Query("", min_length=0),
+    aula: Optional[str] = Query(None),
+    cedula: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    """Busca reservas por aula, nombre, cédula o sede."""
+    requiere_login(request)
+    query = db.query(ReservaAula).filter(ReservaAula.activo == True)
+    if aula:
+        query = query.filter(ReservaAula.aula_codigo.ilike(f"%{aula}%"))
+    if cedula:
+        query = query.filter(ReservaAula.cedula.ilike(f"%{cedula}%"))
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            (ReservaAula.aula_codigo.ilike(like))
+            | (ReservaAula.nombre_persona.ilike(like))
+            | (ReservaAula.cedula.ilike(like))
+            | (ReservaAula.sede.ilike(like))
+            | (ReservaAula.area_solicitante.ilike(like))
+        )
+    rows = query.order_by(ReservaAula.id.desc()).limit(limit).all()
+    return [
+        {
+            "id": r.id,
+            "area_solicitante": r.area_solicitante or "",
+            "cedula": r.cedula or "",
+            "nombre_persona": r.nombre_persona or "",
+            "dia": r.dia or "",
+            "fecha_ini": r.fecha_ini or "",
+            "hora_ini": r.hora_ini or "",
+            "fecha_fin": r.fecha_fin or "",
+            "hora_fin": r.hora_fin or "",
+            "sede": r.sede or "",
+            "aula_codigo": r.aula_codigo,
+        }
+        for r in rows
+    ]
 
 
 @app.get("/api/archivos")

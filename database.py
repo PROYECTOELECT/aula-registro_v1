@@ -130,6 +130,37 @@ class RegistroApertura(Base):
     usuario_nombre = Column(String(150), nullable=True)
 
 
+
+class ArchivoReserva(Base):
+    """Archivos Excel de reservas de aulas."""
+    __tablename__ = "archivo_reserva"
+    id = Column(Integer, primary_key=True)
+    nombre_archivo = Column(String(255), nullable=False)
+    fecha_carga = Column(DateTime, default=datetime.now)
+    total_reservas = Column(Integer, default=0)
+    ruta = Column(String(500), nullable=True)
+    cargado_por = Column(Integer, nullable=True)
+    activo = Column(Boolean, default=True)
+
+
+class ReservaAula(Base):
+    """Reserva de aula cargada desde Excel de reservas."""
+    __tablename__ = "reservas_aula"
+    id = Column(Integer, primary_key=True, index=True)
+    area_solicitante = Column(String(255), nullable=True)
+    cedula = Column(String(50), nullable=True, index=True)
+    nombre_persona = Column(String(255), nullable=True, index=True)
+    dia = Column(String(30), nullable=True)
+    fecha_ini = Column(String(30), nullable=True)
+    hora_ini = Column(String(20), nullable=True)
+    fecha_fin = Column(String(30), nullable=True)
+    hora_fin = Column(String(20), nullable=True)
+    sede = Column(String(50), nullable=True, index=True)
+    aula_codigo = Column(String(50), nullable=False, index=True)
+    archivo_id = Column(Integer, nullable=True, index=True)
+    activo = Column(Boolean, default=True)
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
