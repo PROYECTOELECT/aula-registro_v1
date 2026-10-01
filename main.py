@@ -11,6 +11,9 @@ import shutil
 import io
 import json
 import secrets
+import hmac
+import base64
+import hashlib
 
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
@@ -59,41 +62,85 @@ except Exception as e:
     print(f"[warn] mount static/uploads: {e}")
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
-SESSIONS = {}
+# Sesión firmada (funciona en Vercel serverless; no usa memoria del proceso)
+SESSION_SECRET = os.environ.get("SESSION_SECRET") or os.environ.get("DATABASE_URL") or "aula-registro-dev-secret-change-me"
+SESSION_HOURS = 12
+
 
 def _safe_init_db():
     try:
         init_db()
     except Exception as e:
-        # En serverless la DB puede fallar un instante; se reintenta en la 1ª petición
         print(f"[warn] init_db: {e}")
 
 _safe_init_db()
 
 
+def _b64url_encode(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _b64url_decode(s: str) -> bytes:
+    pad = "=" * (-len(s) % 4)
+    return base64.urlsafe_b64decode(s + pad)
+
+
 def crear_sesion(usuario: Usuario) -> str:
-    token = secrets.token_hex(32)
-    SESSIONS[token] = {
+    """Token firmado con HMAC: payload.exp.signature (sin estado en servidor)."""
+    payload = {
         "user_id": usuario.id,
         "username": usuario.username,
         "rol": usuario.rol,
         "nombre": usuario.nombre,
         "foto": usuario.foto,
         "creado_por": usuario.creado_por,
-        "exp": datetime.now() + timedelta(hours=12),
+        "exp": (datetime.now() + timedelta(hours=SESSION_HOURS)).timestamp(),
     }
-    return token
+    body = _b64url_encode(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+    sig = hmac.new(SESSION_SECRET.encode("utf-8"), body.encode("ascii"), hashlib.sha256).hexdigest()
+    return f"{body}.{sig}"
 
 
 def obtener_usuario_sesion(request: Request):
     token = request.cookies.get("session_token")
-    if not token or token not in SESSIONS:
+    if not token or "." not in token:
         return None
-    data = SESSIONS[token]
-    if data["exp"] < datetime.now():
-        del SESSIONS[token]
+    try:
+        body, sig = token.rsplit(".", 1)
+        expect = hmac.new(SESSION_SECRET.encode("utf-8"), body.encode("ascii"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expect):
+            return None
+        payload = json.loads(_b64url_decode(body).decode("utf-8"))
+        if float(payload.get("exp", 0)) < datetime.now().timestamp():
+            return None
+        return {
+            "user_id": payload.get("user_id"),
+            "username": payload.get("username"),
+            "rol": payload.get("rol"),
+            "nombre": payload.get("nombre"),
+            "foto": payload.get("foto"),
+            "creado_por": payload.get("creado_por"),
+        }
+    except Exception:
         return None
-    return data
+
+
+def _cookie_secure(request: Request) -> bool:
+    # HTTPS en Vercel
+    return bool(os.environ.get("VERCEL") or request.url.scheme == "https")
+
+
+def set_session_cookie(resp, token: str, request: Request = None):
+    secure = True if os.environ.get("VERCEL") else False
+    resp.set_cookie(
+        "session_token",
+        token,
+        httponly=True,
+        max_age=SESSION_HOURS * 3600,
+        samesite="lax",
+        secure=secure,
+        path="/",
+    )
 
 
 def requiere_login(request: Request):
@@ -140,17 +187,14 @@ async def login(request: Request, username: str = Form(...), password: str = For
         return templates.TemplateResponse("login.html", {"request": request, "error": "Usuario o contraseña incorrectos"}, status_code=401)
     token = crear_sesion(user)
     resp = RedirectResponse("/", status_code=302)
-    resp.set_cookie("session_token", token, httponly=True, max_age=12 * 3600, samesite="lax")
+    set_session_cookie(resp, token, request)
     return resp
 
 
 @app.get("/logout")
 async def logout(request: Request):
-    token = request.cookies.get("session_token")
-    if token and token in SESSIONS:
-        del SESSIONS[token]
     resp = RedirectResponse("/login", status_code=302)
-    resp.delete_cookie("session_token")
+    resp.delete_cookie("session_token", path="/")
     return resp
 
 
